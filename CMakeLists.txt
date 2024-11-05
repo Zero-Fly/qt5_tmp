@@ -1,23 +1,11 @@
 cmake_minimum_required(VERSION 3.15.0)
-#cmake_policy(SET CMP0016 NEW)
+cmake_policy(SET CMP0016 NEW)
 
 project(qt-multithreading VERSION 1.0.0)
 
-find_package(Qt5 REQUIRED COMPONENTS Core Network Widgets)
-set(CMAKE_AUTOMOC ON)
+add_subdirectory(src/server)
+add_subdirectory(src/client)
 
- #include_directories(${CMAKE_SOURCE_DIR}/src/server)
-set(SOURCES
-    main.cpp
-    src/server/tserver.cpp
-    src/client/tclient.cpp
-)
-set(HEADERS
-    src/server/tserver.h
-    src/client/tclient.h
-)
-add_executable(qt-multithreading ${SOURCES} ${HEADERS})
-
-target_link_libraries(qt-multithreading Qt5::Core Qt5::Network Qt5::Widgets)
-#add_subdirectory(src/server)
-#add_subdirectory(src/client)
+enable_testing()
+#add_subdirectory(test/server)
+#add_subdirectory(test/client)

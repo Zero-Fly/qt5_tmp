@@ -1,124 +1,158 @@
-#include "tclient.h"
-#include <QMessageBox>
+#include <QApplication>
+#include <QWidget>
+#include <QTcpSocket>
+#include <iostream>
+#include <QDialog>
+#include <QLabel>
+#include <QPushButton>
+#include <QDialogButtonBox>
+#include <QVBoxLayout>
+#include <QMutex>
+#include <QThread>
+#include <QWaitCondition>
 
-FortuneThread::FortuneThread(QObject *parent) : QThread(parent){}
-
-void FortuneThread::requestNewFortune(const QString &hostName, quint16 port)
+/*
+class FortuneThread : public QThread
 {
-    QMutexLocker locker(&mutex);
-    this->hostName = hostName;
-    this->port = port;
-    if (!isRunning())
-        start();
-    else
-        cond.wakeOne();
-}
+    Q_OBJECT
 
-void FortuneThread::run()
-{
-    mutex.lock();
-    QString serverName = hostName;
-    quint16 serverPort = port;
-    mutex.unlock();
-    while (!quit) {
-      const int Timeout = 5 * 1000;
+public:
+    FortuneThread(QObject *parent = nullptr);
+    ~FortuneThread();
 
-      QTcpSocket socket;
-      socket.connectToHost(serverName, serverPort);
-      if (!socket.waitForConnected(Timeout)) {
-        emit error(socket.error(), socket.errorString());
-        return;
+    void requestNewFortune(const QString &hostName, quint16 port);
+    void run() override;
+
+signals:
+    void newFortune(const QString &fortune);
+    void error(int socketError, const QString &message);
+
+private:
+    QString hostName;
+    quint16 port;
+    QMutex mutex;
+    QWaitCondition cond;
+    bool quit;
+};
+*/
+
+class Worker : public QObject {
+    Q_OBJECT
+
+public:
+    Worker(){};
+    ~Worker(){};
+
+public slots:
+    void process(){
+      socket.connectToHost(host, port); // Connect to the server
+      if (!socket.waitForConnected(3000)) {
+          std::cout << "Connection failed!" << std::endl;
+          emit error("Connection failed!");
+          return;
       }
+
+      std::cout << "Connected to server!" << std::endl;
       QDataStream in(&socket);
-      in.setVersion(QDataStream::Qt_4_0);
-      QString fortune;
-      do {
-        if (!socket.waitForReadyRead(Timeout)) {
-          emit error(socket.error(), socket.errorString());
+      QString Fortune;
+
+      if(!socket.waitForReadyRead(3000)){
+          std::cout << "Reading failed!" << std::endl;
+          emit error("Reading failed!");
           return;
         }
+      in.startTransaction();
+      in >> Fortune;
+      socket.disconnectFromHost();
+      emit finished(Fortune);
+    };
 
-        in.startTransaction();
-        in >> fortune;
-     } while (!in.commitTransaction());
+signals:
+    void finished(QString fortune);
+    void error(QString err);
 
-     mutex.lock();
-     emit newFortune(fortune);
+private:
+    QString host = "127.0.0.1";
+    qint16 port = 4242;
+    QTcpSocket socket;
+};
 
-     cond.wait(&mutex);
-     serverName = hostName;
-     serverPort = port;
-     mutex.unlock();
-    }
-}
 
-FortuneThread::~FortuneThread(){
-  mutex.lock();
-  quit = true;
-  cond.wakeOne();
-  mutex.unlock();
-  wait();
-}
+class BlockingClient : public QDialog
+{
+    Q_OBJECT
 
-tClient::tClient(QWidget *parent)
-  : QWidget(parent)
-  , layout(new QVBoxLayout)
-  , hostCombo(new QComboBox)
-  , portLineEdit(new QLineEdit)
+public:
+  BlockingClient(QWidget *parent = nullptr)
+  : QDialog(parent)
+  , boxLayout(new QVBoxLayout)
+  , statusLabel(new QLabel(tr(" -Fortune-")))
   , getFortuneButton(new QPushButton(tr("Get Fortune")))
-{
-      layout->addWidget(hostCombo);
-      layout->addWidget(getFortuneButton);
-      setLayout(layout);
-      setWindowTitle("ComboBox Example");
-}
+  {
+    boxLayout->addWidget(statusLabel);
+    boxLayout->addWidget(getFortuneButton);
+    setLayout(boxLayout);
+    setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
+    connect(getFortuneButton, &QPushButton::clicked, this, &BlockingClient::requestNewFortune);
+    std::cout << "This is fucking rise!!!"<<std::endl;
+  };
 
-void tClient::requestNewFortune()
-{
+  void PrintFort(){
+    std::cout<< currentFortune.toStdString() << std::endl;
+  }
+private slots:
+  void requestNewFortune(){
     getFortuneButton->setEnabled(false);
-    thread.requestNewFortune(hostLineEdit->text(),
-                             portLineEdit->text().toInt());
+    this->Fort();
+  }
+
+  void Fort(){
+    QThread* thread = new QThread;
+    Worker* worker = new Worker();
+    worker->moveToThread(thread);
+    connect(worker, SIGNAL(error(QString)), this, SLOT(errorString(QString)));
+    connect(thread, SIGNAL(started()), worker, SLOT(process()));
+    connect(worker, SIGNAL(finished()), thread, SLOT(quit()));
+    connect(worker, &Worker::finished, this, &BlockingClient::showFortune);
+    connect(worker, SIGNAL(finished()), worker, SLOT(deleteLater()));
+    connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
+    thread->start();
+    //std::cout<< Fortune.toStdString() << std::endl;
+  };
+    void showFortune(QString nextFortune){
+          if (nextFortune == currentFortune) {
+                  requestNewFortune();
+                  return;
+              }
+
+          currentFortune = nextFortune;
+          statusLabel->setText(currentFortune);
+          getFortuneButton->setEnabled(true);
+    };
+    void displayError(int socketError, const QString &message){};
+    void enableGetFortuneButton(){  getFortuneButton->setEnabled(true); };
+
+private:
+    QString host = "127.0.0.1";
+    qint16 port = 4242;
+    QTcpSocket socket;
+    QString currentFortune;
+    QLabel *statusLabel;
+    QPushButton *getFortuneButton = nullptr;
+    QDialogButtonBox *buttonBox = nullptr;
+    QVBoxLayout *boxLayout = nullptr;
+};
+
+int main(int argc, char *argv[]) {
+    QApplication a(argc, argv);
+
+    BlockingClient client;
+    client.resize(400, 300); // Set the window size
+    client.show();
+
+
+
+    return a.exec();
 }
 
-void tClient::showFortune(const QString &nextFortune)
-{
-    if (nextFortune == currentFortune) {
-        requestNewFortune();
-        return;
-    }
-
-    currentFortune = nextFortune;
-    statusLabel->setText(currentFortune);
-    getFortuneButton->setEnabled(true);
-}
-
-void tClient::displayError(int socketError, const QString &message)
-{
-    switch (socketError) {
-    case QAbstractSocket::RemoteHostClosedError:
-        break;
-    case QAbstractSocket::HostNotFoundError:
-        QMessageBox::information(this, tr("Fortune Client"),
-                                 tr("The host was not found. Please check the "
-                                    "host name and port settings."));
-        break;
-    case QAbstractSocket::ConnectionRefusedError:
-        QMessageBox::information(this, tr("Fortune Client"),
-                                 tr("The connection was refused by the peer. "
-                                    "Make sure the fortune server is running, "
-                                    "and check that the host name and port "
-                                    "settings are correct."));
-        break;
-    default:
-        QMessageBox::information(this, tr("Fortune Client"),
-                                 tr("The following error occurred: %1."));
-    }
-
-    getFortuneButton->setEnabled(true);
-}
-
-void tClient::enableGetFortuneButton(){
-  getFortuneButton->setEnabled(true);
-}
-
-#include "tclient.moc"
+#include <tclient.moc>
