@@ -30,7 +30,6 @@ public slots:
       if (!socket.waitForConnected(3000)) {
           std::cout << "Connection failed!" << std::endl;
           emit error("Connection failed!");
-          return;
       }
 
       std::cout << "Connected to server!" << std::endl;
@@ -40,7 +39,6 @@ public slots:
       if(!socket.waitForReadyRead(3000)){
           std::cout << "Reading failed!" << std::endl;
           emit error("Reading failed!");
-          return;
         }
       in.startTransaction();
       in >> Fortune;
@@ -113,11 +111,6 @@ private slots:
     thread->start();
   };
     void showFortune(QString nextFortune){
-          if (nextFortune == currentFortune) {
-                  requestNewFortune();
-                  return;
-              }
-
           currentFortune = nextFortune;
           statusLabel->setText(currentFortune);
           getFortuneButton->setEnabled(true);
