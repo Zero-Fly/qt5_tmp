@@ -7,44 +7,25 @@
 #include <QPushButton>
 #include <QDialogButtonBox>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QMutex>
 #include <QThread>
+#include <QComboBox>
+#include <QLineEdit>
 #include <QWaitCondition>
 
-/*
-class FortuneThread : public QThread
-{
-    Q_OBJECT
-
-public:
-    FortuneThread(QObject *parent = nullptr);
-    ~FortuneThread();
-
-    void requestNewFortune(const QString &hostName, quint16 port);
-    void run() override;
-
-signals:
-    void newFortune(const QString &fortune);
-    void error(int socketError, const QString &message);
-
-private:
-    QString hostName;
-    quint16 port;
-    QMutex mutex;
-    QWaitCondition cond;
-    bool quit;
-};
-*/
 
 class Worker : public QObject {
     Q_OBJECT
 
 public:
-    Worker(){};
+    Worker(int port): port(port){};
     ~Worker(){};
 
 public slots:
     void process(){
+      std::cout<<"The server is running on\n\nIP: "<< host.toStdString() << "\nport: "<< port <<"\n\n";
+      socket.abort();
       socket.connectToHost(host, port); // Connect to the server
       if (!socket.waitForConnected(3000)) {
           std::cout << "Connection failed!" << std::endl;
@@ -72,8 +53,8 @@ signals:
     void error(QString err);
 
 private:
-    QString host = "127.0.0.1";
-    qint16 port = 4242;
+    QString host = "192.168.22.157";
+    int port;
     QTcpSocket socket;
 };
 
@@ -86,9 +67,21 @@ public:
   BlockingClient(QWidget *parent = nullptr)
   : QDialog(parent)
   , boxLayout(new QVBoxLayout)
+  , hostCombo(new QComboBox)
+  , portLineEdit(new QLineEdit)
   , statusLabel(new QLabel(tr(" -Fortune-")))
   , getFortuneButton(new QPushButton(tr("Get Fortune")))
   {
+    QHBoxLayout* ipHLayout = new QHBoxLayout;
+    ipHLayout->addWidget(new QLabel(tr("IP: ")));
+    hostCombo->addItem("localhost");
+    ipHLayout->addWidget(hostCombo);
+    QHBoxLayout* portHLayout = new QHBoxLayout;
+    portHLayout->addWidget(new QLabel(tr("port: ")));
+    portHLayout->addWidget(portLineEdit);
+
+    boxLayout->addLayout(ipHLayout);
+    boxLayout->addLayout(portHLayout);
     boxLayout->addWidget(statusLabel);
     boxLayout->addWidget(getFortuneButton);
     setLayout(boxLayout);
@@ -103,12 +96,13 @@ public:
 private slots:
   void requestNewFortune(){
     getFortuneButton->setEnabled(false);
+    port = portLineEdit->text().toInt();
     this->Fort();
   }
 
   void Fort(){
     QThread* thread = new QThread;
-    Worker* worker = new Worker();
+    Worker* worker = new Worker(port);
     worker->moveToThread(thread);
     connect(worker, SIGNAL(error(QString)), this, SLOT(errorString(QString)));
     connect(thread, SIGNAL(started()), worker, SLOT(process()));
@@ -117,7 +111,6 @@ private slots:
     connect(worker, SIGNAL(finished()), worker, SLOT(deleteLater()));
     connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
     thread->start();
-    //std::cout<< Fortune.toStdString() << std::endl;
   };
     void showFortune(QString nextFortune){
           if (nextFortune == currentFortune) {
@@ -133,10 +126,12 @@ private slots:
     void enableGetFortuneButton(){  getFortuneButton->setEnabled(true); };
 
 private:
-    QString host = "127.0.0.1";
-    qint16 port = 4242;
+    QString host = "192.168.22.157";
+    int port = 4242;
     QTcpSocket socket;
     QString currentFortune;
+    QComboBox *hostCombo = nullptr;
+    QLineEdit *portLineEdit = nullptr;
     QLabel *statusLabel;
     QPushButton *getFortuneButton = nullptr;
     QDialogButtonBox *buttonBox = nullptr;
