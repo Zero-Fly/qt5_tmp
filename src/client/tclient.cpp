@@ -1,4 +1,3 @@
-#include <QApplication>
 #include <QWidget>
 #include <QTcpSocket>
 #include <iostream>
@@ -19,7 +18,7 @@ class Worker : public QObject {
     Q_OBJECT
 
 public:
-    Worker(int port): port(port){};
+    Worker(QString host, int port): host(host), port(port){};
     ~Worker(){};
 
 public slots:
@@ -65,15 +64,14 @@ public:
   BlockingClient(QWidget *parent = nullptr)
   : QDialog(parent)
   , boxLayout(new QVBoxLayout)
-  , hostCombo(new QComboBox)
+  , hostLineEdit(new QLineEdit)
   , portLineEdit(new QLineEdit)
   , statusLabel(new QLabel(tr(" -Fortune-")))
   , getFortuneButton(new QPushButton(tr("Get Fortune")))
   {
     QHBoxLayout* ipHLayout = new QHBoxLayout;
     ipHLayout->addWidget(new QLabel(tr("IP: ")));
-    hostCombo->addItem("localhost");
-    ipHLayout->addWidget(hostCombo);
+    ipHLayout->addWidget(hostLineEdit);
     QHBoxLayout* portHLayout = new QHBoxLayout;
     portHLayout->addWidget(new QLabel(tr("port: ")));
     portHLayout->addWidget(portLineEdit);
@@ -94,13 +92,14 @@ public:
 private slots:
   void requestNewFortune(){
     getFortuneButton->setEnabled(false);
+    host = hostLineEdit->text();
     port = portLineEdit->text().toInt();
     this->Fort();
   }
 
   void Fort(){
     QThread* thread = new QThread;
-    Worker* worker = new Worker(port);
+    Worker* worker = new Worker(host, port);
     worker->moveToThread(thread);
     connect(worker, SIGNAL(error(QString)), this, SLOT(errorString(QString)));
     connect(thread, SIGNAL(started()), worker, SLOT(process()));
@@ -123,7 +122,7 @@ private:
     int port = 4242;
     QTcpSocket socket;
     QString currentFortune;
-    QComboBox *hostCombo = nullptr;
+    QLineEdit *hostLineEdit = nullptr;
     QLineEdit *portLineEdit = nullptr;
     QLabel *statusLabel;
     QPushButton *getFortuneButton = nullptr;
@@ -131,16 +130,4 @@ private:
     QVBoxLayout *boxLayout = nullptr;
 };
 
-int main(int argc, char *argv[]) {
-    QApplication a(argc, argv);
-
-    BlockingClient client;
-    client.resize(400, 300); // Set the window size
-    client.show();
-
-
-
-    return a.exec();
-}
-
-#include <tclient.moc>
+#include "tclient.moc"
