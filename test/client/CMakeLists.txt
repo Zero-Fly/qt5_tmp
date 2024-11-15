@@ -9,10 +9,15 @@ include_directories(${Qt5_INCLUDE_DIRS})
 
 set(CMAKE_AUTOMOC ON)
 
+file(GLOB_RECURSE CLIENT_SOURCES
+    ../../src/client/*.h
+    ../../src/client/*.cpp
+)
+
 add_executable(
   client_test
+  ${CLIENT_SOURCES}
   TestClient.cpp
-
 )
 target_link_libraries(
   client_test

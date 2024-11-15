@@ -1,6 +1,5 @@
 #include <QWidget>
 #include <QTcpSocket>
-#include <iostream>
 #include <QDialog>
 #include <QLabel>
 #include <QPushButton>
@@ -11,69 +10,45 @@
 #include <QThread>
 #include <QComboBox>
 #include <QLineEdit>
+#include <iostream>
 #include <QWaitCondition>
+#include "tclient.h"
 
+void Worker::process() {
+  socket.abort();
+  socket.connectToHost(host, port); // Connect to the server
+  if (!socket.waitForConnected(3000)) {
+      std::cout << "Connection failed!" << std::endl;
+      emit error("Connection failed!");
+  }
 
-class Worker : public QObject {
-    Q_OBJECT
+  std::cout << "Connected to server!" << std::endl;
+  QDataStream in(&socket);
+  QString Fortune;
 
-public:
-    Worker(QString host, int port): host(host), port(port){};
-    ~Worker(){};
-
-public slots:
-    void process(){
-      std::cout<<"The server is running on\n\nIP: "<< host.toStdString() << "\nport: "<< port <<"\n\n";
-      socket.abort();
-      socket.connectToHost(host, port); // Connect to the server
-      if (!socket.waitForConnected(3000)) {
-          std::cout << "Connection failed!" << std::endl;
-          emit error("Connection failed!");
-      }
-
-      std::cout << "Connected to server!" << std::endl;
-      QDataStream in(&socket);
-      QString Fortune;
-
-      if(!socket.waitForReadyRead(3000)){
-          std::cout << "Reading failed!" << std::endl;
-          emit error("Reading failed!");
-        }
-      in.startTransaction();
-      in >> Fortune;
-      socket.disconnectFromHost();
-      emit finished(Fortune);
-    };
-
-signals:
-    void finished(QString fortune);
-    void error(QString err);
-
-private:
-    QString host = "192.168.22.157";
-    int port;
-    QTcpSocket socket;
+  if(!socket.waitForReadyRead(3000)){
+      std::cout << "Reading failed!" << std::endl;
+      emit error("Reading failed!");
+  }
+  in.startTransaction();
+  in >> Fortune;
+  socket.disconnectFromHost();
+  emit finished(Fortune);
 };
 
 
-class BlockingClient : public QDialog
-{
-    Q_OBJECT
-
-public:
-  BlockingClient(QWidget *parent = nullptr)
-  : QDialog(parent)
-  , boxLayout(new QVBoxLayout)
-  , hostLineEdit(new QLineEdit)
-  , portLineEdit(new QLineEdit)
-  , statusLabel(new QLabel(tr(" -Fortune-")))
-  , getFortuneButton(new QPushButton(tr("Get Fortune")))
+BlockingClient::BlockingClient(QWidget *parent) : QDialog(parent),
+                                              boxLayout(new QVBoxLayout(parent)),
+                                              hostLineEdit(new QLineEdit(parent)),
+                                              portLineEdit(new QLineEdit(parent)),
+                                              statusLabel(new QLabel(tr(" -Fortune-"), parent)),
+                                              getFortuneButton(new QPushButton(tr("Get Fortune"), parent))
   {
-    QHBoxLayout* ipHLayout = new QHBoxLayout;
-    ipHLayout->addWidget(new QLabel(tr("IP: ")));
+    QHBoxLayout* ipHLayout = new QHBoxLayout(parent);
+    ipHLayout->addWidget(new QLabel(tr("IP: "),parent));
     ipHLayout->addWidget(hostLineEdit);
-    QHBoxLayout* portHLayout = new QHBoxLayout;
-    portHLayout->addWidget(new QLabel(tr("port: ")));
+    QHBoxLayout* portHLayout = new QHBoxLayout(parent);
+    portHLayout->addWidget(new QLabel(tr("port: "),parent));
     portHLayout->addWidget(portLineEdit);
 
     boxLayout->addLayout(ipHLayout);
@@ -83,21 +58,25 @@ public:
     setLayout(boxLayout);
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
     connect(getFortuneButton, &QPushButton::clicked, this, &BlockingClient::requestNewFortune);
-    std::cout << "This is fucking rise!!!"<<std::endl;
+    //std::cout << "This is fucking rise!!!"<<std::endl;
   };
 
-  void PrintFort(){
+  void BlockingClient::PrintFort(){
     std::cout<< currentFortune.toStdString() << std::endl;
   }
-private slots:
-  void requestNewFortune(){
+
+  QString BlockingClient::getStatusLabel(){
+    return this->statusLabel->text();
+  };
+
+  void BlockingClient::requestNewFortune() {
     getFortuneButton->setEnabled(false);
     host = hostLineEdit->text();
     port = portLineEdit->text().toInt();
     this->Fort();
   }
 
-  void Fort(){
+  void BlockingClient::Fort() {
     QThread* thread = new QThread;
     Worker* worker = new Worker(host, port);
     worker->moveToThread(thread);
@@ -109,25 +88,13 @@ private slots:
     connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
     thread->start();
   };
-    void showFortune(QString nextFortune){
+    void BlockingClient::showFortune(QString nextFortune){
           currentFortune = nextFortune;
           statusLabel->setText(currentFortune);
           getFortuneButton->setEnabled(true);
     };
-    void displayError(int socketError, const QString &message){};
-    void enableGetFortuneButton(){  getFortuneButton->setEnabled(true); };
+    void BlockingClient::displayError(int socketError, const QString &message){};
+    void BlockingClient::enableGetFortuneButton() {  getFortuneButton->setEnabled(true); };
 
-private:
-    QString host = "192.168.22.157";
-    int port = 4242;
-    QTcpSocket socket;
-    QString currentFortune;
-    QLineEdit *hostLineEdit = nullptr;
-    QLineEdit *portLineEdit = nullptr;
-    QLabel *statusLabel;
-    QPushButton *getFortuneButton = nullptr;
-    QDialogButtonBox *buttonBox = nullptr;
-    QVBoxLayout *boxLayout = nullptr;
-};
 
-#include "tclient.moc"
+

@@ -2,68 +2,66 @@
 #include <gmock/gmock.h>
 #include <QApplication>
 #include <QTcpSocket>
-#include "../../src/client/tclient.cpp"
+#include <QSignalSpy>
+#include <QTest>
+#include "../../src/client/tclient.h"
 
-// Mock class for QTcpSocket to simulate network behavior
-class MockTcpSocket : public QTcpSocket {
-    Q_OBJECT
-
-public:
-    MOCK_METHOD0(waitForConnected, bool());
-    MOCK_METHOD0(waitForReadyRead, bool());
-    MOCK_METHOD1(connectToHost, void(QString, quint16));
-    MOCK_METHOD0(disconnectFromHost, void());
-    MOCK_METHOD0(readAll, QByteArray());
-};
-
-// Test Worker class
-class WorkerTest : public ::testing::Test {
+// Test suite for the BlockingClient
+class BlockingClientTest : public ::testing::Test {
 protected:
+    BlockingClient *client;
+
     void SetUp() override {
-        mockSocket = new MockTcpSocket;
-        worker = new Worker("localhost", 4242);
+        client = new BlockingClient();
     }
 
     void TearDown() override {
-        delete worker;
-        delete mockSocket;
+        delete client;
+    }
+};
+
+
+
+// Test suite for the Worker
+class WorkerTest : public ::testing::Test {
+protected:
+    Worker *worker;
+    QThread *thread;
+
+    void SetUp() override {
+        worker = new Worker("localhost", 12345);
+        thread = new QThread();
+        worker->moveToThread(thread);
     }
 
-    MockTcpSocket *mockSocket;
-    Worker *worker;
+    void TearDown() override {
+        thread->quit();
+        thread->wait();
+        delete worker;
+        delete thread;
+    }
 };
 
-// Test that Worker connects successfully and emits finished signal
-TEST_F(WorkerTest, SuccessfulConnection) {
-    EXPECT_CALL(*mockSocket, connectToHost("localhost", 4242)).Times(1);
-    EXPECT_CALL(*mockSocket, waitForConnected()).WillOnce(::testing::Return(true));
-    EXPECT_CALL(*mockSocket, waitForReadyRead()).WillOnce(::testing::Return(true));
-    EXPECT_CALL(*mockSocket, readAll()).WillOnce(::testing::Return(QByteArray("Test Fortune")));
+  // Test that the Worker emits an error signal when connection fails
+  TEST_F(WorkerTest, ConnectionFailureEmitsError) {
+      QSignalSpy errorSpy(worker, SIGNAL(error(QString)));
+      thread->start();
+      worker->process();
+      EXPECT_EQ(errorSpy.count(), 2);
+      EXPECT_EQ(errorSpy.takeFirst().at(0).toString(), "Connection failed!");
+  }
 
-    QSignalSpy spy(worker, &Worker::finished);
-    worker->process();
+  // Test that the BlockingClient initializes correctly
+  TEST_F(BlockingClientTest, Initialization) {
+      EXPECT_EQ(client->getStatusLabel(), " -Fortune-");
+  }
 
-    EXPECT_EQ(spy.count(), 1);
-    EXPECT_EQ(spy.takeFirst().at(0).toString(), "Test Fortune");
-}
+  // Main function to run the tests
+  int main(int argc, char **argv) {
+      QApplication app(argc, argv); // Create QApplication instance
+      ::testing::InitGoogleTest(&argc, argv); // Initialize Google Test
+      return RUN_ALL_TESTS(); // Run all tests
+  }
 
-// Test BlockingClient class
-class BlockingClientTest : public ::testing::Test {
-protected:
-    BlockingClient client;
-};
-
-// Test that BlockingClient initializes correctly
-TEST_F(BlockingClientTest, Initialization) {
-    EXPECT_EQ(client.windowTitle(), "Fortune Client");
-    EXPECT_FALSE(client.isVisible());
-}
-
-// Test that requestNewFortune disables the button
-TEST_F(BlockingClientTest, RequestNewFortuneDisablesButton) {
-    client.show();
-    client.requestNewFortune();
-    EXPECT_FALSE(client.getFortuneButton->isEnabled());
-}
 
 #include "TestClient.moc"

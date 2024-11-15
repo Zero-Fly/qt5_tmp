@@ -9,8 +9,14 @@ include_directories(${Qt5_INCLUDE_DIRS})
 
 set(CMAKE_AUTOMOC ON)
 
+file(GLOB_RECURSE SERVER_SOURCES
+    ../../src/server/*.h
+    ../../src/server/*.cpp
+)
+
 add_executable(
   server_test
+  ${SERVER_SOURCES}
   TestServer.cpp
 
 )

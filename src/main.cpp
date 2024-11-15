@@ -2,11 +2,11 @@
 #include<QApplication>
 #include<iostream>
 
-#include"src/client/tclient.cpp"
-#include"src/server/tserver.cpp"
+#include"client/tclient.h"
+#include"server/tserver.h"
 
 int main(int argc, char *argv[]) {
-    QCoreApplication ca(argc, argv);
+    QApplication a(argc, argv);
     FortuneServer server;
     if (!server.listen()) {
           std::cout<<"Server can't run"<< std::endl;
@@ -25,14 +25,11 @@ int main(int argc, char *argv[]) {
     if (ipAddress.isEmpty())
        ipAddress = QHostAddress(QHostAddress::LocalHost).toString();
        std::cout<<"The server is running on\n\nIP: "<< ipAddress.toStdString() << "\nport: "<< server.serverPort() <<"\n\n";
-    QApplication a(argc, argv);
+
 
     BlockingClient client;
     client.resize(400, 300); // Set the window size
     client.show();
 
-
-
     return a.exec();
 }
-//#include"main.moc"
